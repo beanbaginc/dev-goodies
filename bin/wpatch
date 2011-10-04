@@ -1,0 +1,14 @@
+#!/bin/sh
+
+PATCH_LEVEL="-p0"
+
+if test $# -eq 2; then
+	PATCH_LEVEL=$1
+	FILENAME=$2
+else
+	FILENAME=$1
+fi
+
+wget -q $FILENAME -O /tmp/wpatch-temp || exit 1
+patch $PATCH_LEVEL < /tmp/wpatch-temp
+rm /tmp/wpatch-temp

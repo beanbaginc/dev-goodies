@@ -1,0 +1,5 @@
+#!/bin/bash
+
+CUR_BRANCH=`git symbolic-ref HEAD | sed "s/refs\/heads\///"`
+git checkout -b $CUR_BRANCH-stage master
+git merge --squash $CUR_BRANCH

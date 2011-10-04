@@ -1,0 +1,152 @@
+#!/usr/bin/env python
+
+import filecmp
+import os
+import re
+import subprocess
+import sys
+import tempfile
+from optparse import OptionParser
+
+
+VERSION = "0.1"
+CHECKOUT_DIR_KEY = "changesetsync.checkoutdir"
+
+if os.uname()[0] == "Darwin":
+   CP_ARGS = "-pR"
+else:
+   CP_ARGS = "-a"
+
+_dir_stack = []
+_checkout_path = None
+_git_path = None
+
+
+def execute(command, split_lines=False, ignore_errors=False,
+            extra_ignore_errors=(), interactive=False):
+    """
+    Utility function to execute a command and return the output.
+    """
+    #print ">>> %s" % command
+    if interactive:
+        p = subprocess.Popen(command, shell=False)
+        rc = p.wait()
+        data = None
+    else:
+        p = subprocess.Popen(command,
+                             stdin=subprocess.PIPE,
+                             stdout=subprocess.PIPE,
+                             stderr=subprocess.STDOUT,
+                             shell=False,
+                             close_fds=True)
+
+        if split_lines:
+            data = p.stdout.readlines()
+        else:
+            data = p.stdout.read()
+
+        rc = p.wait()
+
+    if rc and not ignore_errors and rc not in extra_ignore_errors:
+        print 'Failed to execute command: %s\n%s' % (command, data)
+        sys.exit(1)
+
+    return data
+
+
+def help():
+    print "Usage: git-hatchet branch path [path...]"
+    print
+    print "Chops files off into a change on another branch."
+    print "Because sometimes instead of a scalpel, you really do need "
+    print "a hatchet."
+
+
+def main(args):
+    parser = OptionParser(usage="%prog branch path [path...]")
+    parser.add_option("--extract-only", dest="extract_only",
+                      default=False, action="store_true",
+                      help="Extract the files but don't remove from HEAD")
+    options, args = parser.parse_args(args)
+
+    if len(args) < 2:
+        parser.print_help()
+        sys.exit(1)
+
+    branch = args[0]
+    paths = args[1:]
+
+    # Grab the current HEAD
+    rev = execute(["git", "rev-parse", "HEAD"]).strip()
+
+    # Get the current branch
+    old_branch = None
+
+    for line in execute(["git", "branch"], split_lines=True):
+        if line.startswith("*"):
+            old_branch = line.split()[1].strip()
+
+    assert old_branch != None
+
+    # Make sure the branch exists.
+    execute(["git", "checkout", "-b", branch, "master"], ignore_errors=True)
+
+    # Switch to it and grab the commit.
+    execute(["git", "checkout", branch])
+    execute(["git", "cherry-pick", "--no-commit", rev])
+
+    # Get the list of files we'd commit.
+    print "Gathering list of files to chop..."
+    included_files = [
+        file.strip()
+        for file in execute(["git", "diff-index", branch, "--name-only"] +
+                            paths,
+                            split_lines=True)
+    ]
+    excluded_files = list(set([
+        file.strip()
+        for file in execute(["git", "diff-index", branch, "--name-only"],
+                            split_lines=True)]) - set(included_files))
+
+    # Now reset this commit and re-do it with the files we want.
+    execute(["git", "reset"])
+
+    print "Adding %s files to new branch..." % len(included_files)
+    for file in included_files:
+        execute(["git", "add", file])
+
+    for file in excluded_files:
+        # Ignore errors because this file may be newly added and not in this
+        # branch.
+        execute(["git", "checkout", file], ignore_errors=True)
+
+    execute(["git", "commit"], interactive=True)
+
+    if not options.extract_only:
+        print "Removing %s files from old commit..." % len(excluded_files)
+
+        execute(["git", "checkout", old_branch])
+
+        old_msg = execute(["git", "log", '--pretty=format:"%s\n\n%b"',
+                           "HEAD", "-1"])
+        if old_msg.startswith('"') and old_msg.endswith('"'):
+            old_msg = old_msg[1:-1]
+
+        execute(["git", "reset", "HEAD^"])
+        execute(["git", "reset"])
+
+        for file in excluded_files:
+            execute(["git", "add", file])
+
+        for file in included_files:
+            execute(["git", "checkout", file])
+
+        execute(["git", "commit", "-m", old_msg])
+
+    print "Done."
+
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
