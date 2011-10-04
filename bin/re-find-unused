@@ -26,6 +26,8 @@ def execute(command, ignore_errors=False):
 def main(args):
     if len(args) < 2:
         print 'Usage: re-find-unused <headerfile> <searchpath>'
+        sys.exit(1)
+
     header_file = args[0]
     search_path = args[1]
 
