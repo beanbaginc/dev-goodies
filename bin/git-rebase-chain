@@ -1,0 +1,73 @@
+#!/usr/bin/env python
+import os
+import subprocess
+import sys
+
+
+def execute(command, split_lines=False, ignore_errors=False,
+            extra_ignore_errors=(), interactive=False):
+    """
+    Utility function to execute a command and return the output.
+    """
+    print ">>> %s" % command
+
+    if interactive:
+        p = subprocess.Popen(command, shell=False)
+        rc = p.wait()
+        data = None
+    else:
+        p = subprocess.Popen(command,
+                             stdin=subprocess.PIPE,
+                             stdout=subprocess.PIPE,
+                             stderr=subprocess.STDOUT,
+                             shell=False,
+                             close_fds=True)
+
+        if split_lines:
+            data = p.stdout.readlines()
+        else:
+            data = p.stdout.read()
+
+        rc = p.wait()
+
+    if rc and not ignore_errors and rc not in extra_ignore_errors:
+        print 'Failed to execute command: %s\n%s' % (command, data)
+        sys.exit(1)
+
+    return data
+
+
+if len(sys.argv) < 2:
+    print "Usage: git rebase-chain <dest> <branch1> [<branch2> ...]"
+    sys.exit(1)
+
+
+dest_branch = sys.argv[1]
+source_branches = sys.argv[2:]
+parent_branches = {}
+
+prev_branch = dest_branch
+
+for branch in source_branches:
+    merge_base = execute(['git', 'merge-base', branch, prev_branch]).strip()
+    prev_sha1 = execute(['git', 'rev-parse', prev_branch]).strip()
+
+    if merge_base == prev_sha1:
+        parent_branches[branch] = prev_sha1
+
+    prev_branch = branch
+
+
+for branch in source_branches:
+    parent_branch = parent_branches.get(branch, None)
+    args = ['git', 'rebase']
+
+    if parent_branch:
+        args += ['--onto', dest_branch, parent_branch]
+    else:
+        args.append(dest_branch)
+
+    args.append(branch)
+
+    execute(args)
+    dest_branch = branch
