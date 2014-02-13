@@ -1,0 +1,207 @@
+#!/usr/bin/env python
+#
+# Easy jumping to branches and other refs, with history.
+#
+# Using git-j, you can easily jump to branches, jump back, or walk up
+# your parent branches.
+#
+# git-j can be used in the following ways:
+#
+# git j <branchname>  - Jumps to a branch
+# git j -             - Jumps to the last checked out branch
+# git j ..            - Jumps to the parent branch (stopping at master)
+# git j history       - Show the stored jump history
+# git j <number>      - Jump to the numbered item in the history
+#
+# On first usage, this will install a post-checkout hook to the repository.
+# It will not overwrite an existing hook, but it must be present for git-j
+# to do its job correctly.
+
+import os
+import subprocess
+import sys
+
+
+HOOK_SCRIPT = """
+#!/bin/sh\n'
+OLD_REF=`git name-rev --name-only $1`
+NEW_REF=`git name-rev --name-only $2`
+
+git j record-jump $OLD_REF $NEW_REF'
+"""
+
+
+git_dir = None
+
+
+class History(object):
+    FILENAME = 'j-history'
+    MAX_HISTORY_LEN = 10
+
+    def __init__(self):
+        self.filename = os.path.join(git_dir, self.FILENAME)
+
+        if os.path.exists(self.filename):
+            with open(self.filename, 'r') as fp:
+                self.lines = [
+                    line.strip()
+                    for line in fp.readlines()
+                ]
+        else:
+            self.lines = []
+
+    def push(self, ref):
+        if not self.lines or ref != self.lines[0]:
+            self.lines.insert(0, ref)
+
+    def pop(self):
+        try:
+            return self.lines.pop(0)
+        except IndexError:
+            return None
+
+    def save(self):
+        with open(self.filename, 'w') as fp:
+            fp.write('\n'.join([
+                line
+                for line in self.lines[:self.MAX_HISTORY_LEN]
+            ]))
+
+    def __getitem__(self, i):
+        return self.lines[i]
+
+    def __iter__(self):
+        for line in self.lines:
+            yield line
+
+
+def execute(command, split_lines=False, ignore_errors=False,
+            extra_ignore_errors=(), interactive=False):
+    """
+    Utility function to execute a command and return the output.
+    """
+    p = subprocess.Popen(command,
+                         stdin=subprocess.PIPE,
+                         stdout=subprocess.PIPE,
+                         stderr=subprocess.STDOUT,
+                         shell=False,
+                         close_fds=True)
+
+    if split_lines:
+        data = p.stdout.readlines()
+    else:
+        data = p.stdout.read()
+
+    rc = p.wait()
+
+    if rc and not ignore_errors and rc not in extra_ignore_errors:
+        sys.stderr.write('Failed to execute command: %s\n%s' % (command, data))
+        sys.exit(1)
+
+    return data
+
+
+def setup_hook(filename):
+    print 'Installing post-checkout hook for git-j...'
+
+    with open(filename, 'w') as fp:
+        fp.write(HOOK_SCRIPT.strip())
+
+    os.chmod(filename, 0755)
+
+
+def record_jump(ref):
+    print 'Recording %s' % ref
+    history = History()
+    history.push(ref)
+    history.save()
+
+
+def checkout_branch(prev_ref):
+    execute(['git', 'checkout', prev_ref])
+
+
+def get_ref_name(ref):
+    return execute(['git', 'name-rev', '--name-only', ref]).strip()
+
+
+def show_history():
+    history = History()
+
+    for i, ref in enumerate(history):
+        print '%d - %s' % (i + 1, ref)
+
+
+def jump(dest):
+    if dest == '-':
+        history = History()
+        prev_ref = history.pop()
+
+        if prev_ref:
+            history.save()
+            checkout_branch(prev_ref)
+        else:
+            sys.stderr.write('There is no previous branch to jump to.\n')
+            sys.exit(1)
+    elif dest == '..':
+        cur_ref = execute(['git', 'rev-parse', '--abbrev-ref', 'HEAD']).strip()
+        refs = execute(['git', 'rev-list', '--pretty=tformat:%P',
+                        cur_ref, '--not', 'master']).splitlines()
+
+        refs = [
+            ref
+            for ref in refs
+            if not ref.startswith('commit')
+        ]
+
+        if len(refs) == 0:
+            sys.stderr.write('There is no parent to jump to.\n')
+            sys.exit(1)
+
+        checkout_branch(get_ref_name(refs[0]))
+    else:
+        try:
+            num = int(dest)
+
+            if num > History.MAX_HISTORY_LEN:
+                num = None
+        except ValueError:
+            num = None
+
+        if num is not None:
+            history = History()
+
+            try:
+                ref = history[num - 1]
+            except IndexError:
+                sys.stderr.write('%d is not a valid index in the history.\n',
+                                 num)
+                sys.exit(1)
+
+            checkout_branch(ref)
+        else:
+            checkout_branch(dest)
+
+
+def main(args):
+    global git_dir
+
+    if len(args) == 0:
+        sys.stderr.write('Usage: git j [branch|-|..]\n')
+        sys.exit(1)
+
+    git_dir = execute(['git', 'rev-parse', '--git-dir']).strip()
+    hook_file = os.path.join(git_dir, 'hooks', 'post-checkout')
+
+    if not os.path.exists(hook_file):
+        setup_hook(hook_file)
+
+    if args[0] == 'record-jump':
+        record_jump(args[1])
+    elif args[0] == 'history':
+        show_history()
+    else:
+        jump(args[0])
+
+
+main(sys.argv[1:])
