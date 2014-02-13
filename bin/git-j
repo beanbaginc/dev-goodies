@@ -36,7 +36,7 @@ git_dir = None
 
 class History(object):
     FILENAME = 'j-history'
-    MAX_HISTORY_LEN = 10
+    MAX_HISTORY_LEN = 20
 
     def __init__(self):
         self.filename = os.path.join(git_dir, self.FILENAME)
