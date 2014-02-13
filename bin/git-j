@@ -23,11 +23,11 @@ import sys
 
 
 HOOK_SCRIPT = """
-#!/bin/sh\n'
+#!/bin/sh\n
 OLD_REF=`git name-rev --name-only $1`
 NEW_REF=`git name-rev --name-only $2`
 
-git j record-jump $OLD_REF $NEW_REF'
+git j record-jump $OLD_REF $NEW_REF
 """
 
 
