@@ -25,7 +25,7 @@
 # How is this useful? Let's give a scenario.
 #
 # Assume a branch setup with 'master', 'release-1.7.x', and 'my-feature'.
-# In this # example, I'll do the following:
+# In this example, I'll do the following:
 #
 # 1) Do some work on 1.7 (maybe I'm merging a few branches in).
 # 2) Rebase my local feature branch on top of it (I like clean trees)
