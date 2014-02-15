@@ -195,26 +195,34 @@ def die(msg):
     sys.exit(1)
 
 
-def execute(command, split_lines=False, ignore_errors=False,
-            extra_ignore_errors=(), interactive=False):
+def execute(command, split_lines=False, to_console=False):
     """
     Utility function to execute a command and return the output.
     """
+    if to_console:
+        stdout = sys.stdout
+        stderr = sys.stderr
+    else:
+        stdout = subprocess.PIPE
+        stderr = subprocess.PIPE
+
     p = subprocess.Popen(command,
                          stdin=subprocess.PIPE,
-                         stdout=subprocess.PIPE,
-                         stderr=subprocess.STDOUT,
+                         stdout=stdout,
+                         stderr=stderr,
                          shell=False,
                          close_fds=True)
 
-    if split_lines:
+    if to_console:
+        data = None
+    elif split_lines:
         data = p.stdout.readlines()
     else:
         data = p.stdout.read()
 
     rc = p.wait()
 
-    if rc and not ignore_errors and rc not in extra_ignore_errors:
+    if rc:
         die('Failed to execute command: %s\n%s' % (command, data))
 
     return data
@@ -271,7 +279,7 @@ def record_jump(old_ref, *args):
 
 
 def checkout_branch(prev_ref):
-    execute(['git', 'checkout', prev_ref])
+    execute(['git', 'checkout', prev_ref], to_console=True)
 
 
 def get_ref_name(ref):
@@ -331,10 +339,11 @@ def jump(dest):
     elif dest == '..':
         cur_ref = execute(['git', 'rev-parse', '--abbrev-ref', 'HEAD']).strip()
         refs = execute(['git', 'rev-list', '--pretty=tformat:%P',
-                        cur_ref, '--not', 'master']).splitlines()
+                        cur_ref, '--not', 'master'],
+                       split_lines=True)
 
         refs = [
-            ref
+            ref.strip()
             for ref in refs
             if not ref.startswith('commit')
         ]
