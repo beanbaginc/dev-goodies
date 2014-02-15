@@ -81,18 +81,31 @@
 #
 
 import ConfigParser
+import hashlib
 import os
 import subprocess
 import sys
 
 
 HOOK_SCRIPT = """
-#!/bin/sh\n
-OLD_REF=`git name-rev --name-only $1`
-NEW_REF=`git name-rev --name-only $2`
+#!/bin/sh
 
-git j record-jump $OLD_REF $NEW_REF
-"""
+if test $3 -eq 1; then
+    OLD_REF=`git name-rev --name-only $1`
+    NEW_REF=`git name-rev --name-only $2`
+
+    git j record-jump $OLD_REF $NEW_REF
+fi
+""".lstrip()
+
+HOOK_SCRIPT_REVS = [
+    # Version 1 hook
+    'e1e383cc72a1224613e45b2c4c7b14a9',
+
+    # Version 2 hook
+    # - Checks the third argument to decide if checking out a branch.
+    'eacaac6c600fc2073358b8b58e3c3fe0',
+]
 
 
 git_dir = None
@@ -207,18 +220,53 @@ def execute(command, split_lines=False, ignore_errors=False,
     return data
 
 
-def setup_hook(filename):
-    print 'Installing post-checkout hook for git-j...'
+def check_hook(filename):
+    with open(filename, 'r') as fp:
+        stored_hook = fp.read()
+
+        if stored_hook.strip() == HOOK_SCRIPT.strip():
+            return
+
+        md5 = hashlib.md5(stored_hook).hexdigest()
+
+        if md5 in HOOK_SCRIPT_REVS:
+            setup_hook(filename, upgrade=True)
+        else:
+            sys.stderr.write(
+                'You have an existing post-checkout hook at\n'
+                '%s\n'
+                '\n'
+                'This does not appear to be an older git-j hook. You\n'
+                'will need to somehow incorporate the following into the\n'
+                'hook:\n'
+                '\n'
+                '--------------------------------------------------------\n'
+                '%s\n'
+                '--------------------------------------------------------\n'
+                '\n'
+                'Note that this hook may change in future versions, and\n'
+                'this will be harder to maintain. Check the git-j source\n'
+                'for the latest updates.\n\n'
+                % (filename, HOOK_SCRIPT))
+
+
+def setup_hook(filename, upgrade=False):
+    if upgrade:
+        print 'Upgrading post-checkout hook for git-j...'
+    else:
+        print 'Installing post-checkout hook for git-j...'
+
+    print
 
     with open(filename, 'w') as fp:
-        fp.write(HOOK_SCRIPT.strip())
+        fp.write(HOOK_SCRIPT)
 
     os.chmod(filename, 0755)
 
 
-def record_jump(ref):
+def record_jump(old_ref, *args):
     history = History()
-    history.push(ref)
+    history.push(old_ref)
     history.save()
 
 
@@ -327,11 +375,13 @@ def main(args):
     git_dir = execute(['git', 'rev-parse', '--git-dir']).strip()
     hook_file = os.path.join(git_dir, 'hooks', 'post-checkout')
 
-    if not os.path.exists(hook_file):
+    if os.path.exists(hook_file):
+        check_hook(hook_file)
+    else:
         setup_hook(hook_file)
 
     if args[0] == 'record-jump':
-        record_jump(args[1])
+        record_jump(*args[1:])
     elif args[0] == 'history':
         show_history()
     elif args[0] == 'alias':
