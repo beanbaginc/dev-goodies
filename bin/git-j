@@ -20,6 +20,65 @@
 # On first usage, this will install a post-checkout hook to the repository.
 # It will not overwrite an existing hook, but it must be present for git-j
 # to do its job correctly.
+#
+#
+# How is this useful? Let's give a scenario.
+#
+# Assume a branch setup with 'master', 'release-1.7.x', and 'my-feature'.
+# In this # example, I'll do the following:
+#
+# 1) Do some work on 1.7 (maybe I'm merging a few branches in).
+# 2) Rebase my local feature branch on top of it (I like clean trees)
+# 3) Merge it into 1.7.
+# 4) Merge the latest 1.7 changes into master.
+# 5) Go back to working on the 1.7 branch.
+#
+# Here we go:
+#
+#   # This only needs to be done once. Just setting up my aliases.
+#   $ git j alias m=master
+#   $ git j alias 1.7=release-1.7.x
+#
+#   $ git j 1.7
+#   # ... merge some branches in or do some work before moving into the
+#   # feature branch work.
+#   $ git j my-feature
+#   $ git rebase release-1.7.x
+#   $ git j ..
+#   $ git merge my-feature
+#   $ git j m
+#   $ git merge release-1.7.x
+#   $ git j -
+#   # Now I'm back on release-1.7.x, ready for more work
+#
+# This replaces:
+#
+#   $ git checkout release-1.7.x
+#   # ... merge some branches in or do some work before moving into the
+#   # feature branch work.
+#   $ git checkout my-feature
+#   $ git rebase release-1.7.x
+#   $ git checkout release-1.7.x
+#   $ git merge my-feature
+#   $ git checkout master
+#   $ git merge release-1.7.x
+#   $ git checkout release-1.7.x
+#   # Now I'm back on release-1.7.x, ready for more work
+#
+#
+# Also, if you're, say, dealing with 3 branches, and do:
+#
+#   $ git j branch1
+#   # ...
+#   $ git j branch2
+#   # ...
+#   $ git j branch3
+#
+# And you want to go back 2 branches in your history to branch 1, you can
+# just do:
+#
+#   $ git j 2
+#
 
 import ConfigParser
 import os
