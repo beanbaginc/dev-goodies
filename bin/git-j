@@ -7,16 +7,21 @@
 #
 # git-j can be used in the following ways:
 #
-# git j <branchname>  - Jumps to a branch
-# git j -             - Jumps to the last checked out branch
-# git j ..            - Jumps to the parent branch (stopping at master)
-# git j history       - Show the stored jump history
-# git j <number>      - Jump to the numbered item in the history
+# git j <branchname>       - Jumps to a branch
+# git j -                  - Jumps to the last checked out branch
+# git j ..                 - Jumps to the parent branch (stopping at master)
+# git j history            - Show the stored jump history
+# git j <number>           - Jump to the numbered item in the history
+# git j alias name=branch  - Store an alias for a branch or SHA
+# git j alias name=        - Removes a stored alias
+# git j alias name         - Shows the value of a stored alias
+# git j aliases            - Shows all aliases
 #
 # On first usage, this will install a post-checkout hook to the repository.
 # It will not overwrite an existing hook, but it must be present for git-j
 # to do its job correctly.
 
+import ConfigParser
 import os
 import subprocess
 import sys
@@ -75,6 +80,49 @@ class History(object):
             yield line
 
 
+class Config(object):
+    FILENAME = 'j-config'
+
+    def __init__(self):
+        self.filename = os.path.join(git_dir, self.FILENAME)
+        self._config = ConfigParser.RawConfigParser()
+
+        if os.path.exists(self.filename):
+            self._config.read(self.filename)
+
+    def save(self):
+        with open(self.filename, 'w') as fp:
+            self._config.write(fp)
+
+    def get_aliases(self):
+        try:
+            return self._config.items('aliases')
+        except ConfigParser.NoSectionError:
+            return []
+
+    def get_alias(self, alias_name, default=None):
+        if self._config.has_option('aliases', alias_name):
+            return self._config.get('aliases', alias_name)
+        else:
+            return default
+
+    def set_alias(self, alias_name, target_name):
+        if not self._config.has_section('aliases'):
+            self._config.add_section('aliases')
+
+        if target_name:
+            self._config.set('aliases', alias_name, target_name)
+
+    def remove_alias(self, alias_name):
+        if self._config.has_option('aliases', alias_name):
+            self._config.remove_option('aliases', alias_name)
+
+
+def die(msg):
+    sys.stderr.write(msg)
+    sys.exit(1)
+
+
 def execute(command, split_lines=False, ignore_errors=False,
             extra_ignore_errors=(), interactive=False):
     """
@@ -95,8 +143,7 @@ def execute(command, split_lines=False, ignore_errors=False,
     rc = p.wait()
 
     if rc and not ignore_errors and rc not in extra_ignore_errors:
-        sys.stderr.write('Failed to execute command: %s\n%s' % (command, data))
-        sys.exit(1)
+        die('Failed to execute command: %s\n%s' % (command, data))
 
     return data
 
@@ -132,6 +179,39 @@ def show_history():
         print '%d - %s' % (i + 1, ref)
 
 
+def set_alias(args):
+    if len(args) != 1:
+        die('Usage: git j alias alias_name[=[branch]]\n')
+
+    config = Config()
+    parts = args[0].split('=', 1)
+    name = parts[0]
+
+    if len(parts) == 2:
+        target = parts[1]
+
+        if target:
+            config.set_alias(name, target)
+        else:
+            config.remove_alias(name)
+
+        config.save()
+    else:
+        target_name = config.get_alias(name)
+
+        if target_name:
+            print target_name
+        else:
+            die('%s is not an alias' % name)
+
+
+def show_aliases():
+    config = Config()
+
+    for alias_name, target_name in config.get_aliases():
+        print '%s = %s' % (alias_name, target_name)
+
+
 def jump(dest):
     if dest == '-':
         history = History()
@@ -141,8 +221,7 @@ def jump(dest):
             history.save()
             checkout_branch(prev_ref)
         else:
-            sys.stderr.write('There is no previous branch to jump to.\n')
-            sys.exit(1)
+            die('There is no previous branch to jump to.\n')
     elif dest == '..':
         cur_ref = execute(['git', 'rev-parse', '--abbrev-ref', 'HEAD']).strip()
         refs = execute(['git', 'rev-list', '--pretty=tformat:%P',
@@ -155,8 +234,7 @@ def jump(dest):
         ]
 
         if len(refs) == 0:
-            sys.stderr.write('There is no parent to jump to.\n')
-            sys.exit(1)
+            die('There is no parent to jump to.\n')
 
         checkout_branch(get_ref_name(refs[0]))
     else:
@@ -174,21 +252,19 @@ def jump(dest):
             try:
                 ref = history[num - 1]
             except IndexError:
-                sys.stderr.write('%d is not a valid index in the history.\n',
-                                 num)
-                sys.exit(1)
+                die('%d is not a valid index in the history.\n' % num)
 
             checkout_branch(ref)
         else:
-            checkout_branch(dest)
+            config = Config()
+            checkout_branch(config.get_alias(dest, dest))
 
 
 def main(args):
     global git_dir
 
     if len(args) == 0:
-        sys.stderr.write('Usage: git j [branch|-|..]\n')
-        sys.exit(1)
+        die('Usage: git j [branch|-|..]\n')
 
     git_dir = execute(['git', 'rev-parse', '--git-dir']).strip()
     hook_file = os.path.join(git_dir, 'hooks', 'post-checkout')
@@ -200,6 +276,10 @@ def main(args):
         record_jump(args[1])
     elif args[0] == 'history':
         show_history()
+    elif args[0] == 'alias':
+        set_alias(args[1:])
+    elif args[0] == 'aliases':
+        show_aliases()
     else:
         jump(args[0])
 
