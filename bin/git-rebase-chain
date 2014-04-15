@@ -1,4 +1,24 @@
 #!/usr/bin/env python
+#
+# Rebases a stack of branches from one location to another.
+#
+# With git rebase-chain, you can easily take a stack of branches and relocate
+# them onto another branch. It also handles resuming after conflict resolution
+# (using --skip and --continue).
+#
+# This simplifies things when you're trying to keep a clean, linear history
+# of in-development work, and want to merge some stuff into the base
+# development branch, or you've altered some branch in the middle of your list
+# of branches and want to fix up all remaining branches.
+#
+# Some example uses:
+#
+#   $ git rebase-chain master branch1 branch2 branch3 branch4
+#   $ git rebase-chain --continue
+#   $ git rebase-chain --skip
+#   $ git rebase-chain --abort
+#
+
 import argparse
 import ConfigParser
 import os
