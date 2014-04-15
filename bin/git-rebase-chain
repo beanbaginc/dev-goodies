@@ -252,13 +252,14 @@ else:
     state.load()
 
     if args.abort_rebase:
+        state.delete()
+
         try:
             print run_rebase('--abort')
         except CommandError as e:
             sys.stderr.write(str(e))
             sys.exit(1)
 
-        state.delete()
         sys.exit(0)
     elif args.skip_commit:
         try:
