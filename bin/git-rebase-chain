@@ -1,8 +1,58 @@
 #!/usr/bin/env python
 import argparse
+import ConfigParser
 import os
 import subprocess
 import sys
+
+
+class CommandError(Exception):
+    pass
+
+
+class State(object):
+    FILENAME = 'rebase-chain-state'
+
+    def __init__(self):
+        self.git_dir = os.path.abspath(
+            run_git('rev-parse', '--git-dir').strip())
+        self.filename = os.path.join(self.git_dir, self.FILENAME)
+
+        self.next_dest = ''
+        self.remaining_branches = []
+        self.branch_parents = {}
+
+    def exists(self):
+        return os.path.exists(self.filename)
+
+    def load(self):
+        config = ConfigParser.ConfigParser()
+        config.read(self.filename)
+
+        self.next_dest = config.get('state', 'next_dest')
+        self.remaining_branches = \
+            config.get('state', 'remaining_branches').strip().split(',')
+
+        for branch, parent in config.items('branch_parents'):
+            self.branch_parents[branch] = parent
+
+    def save(self):
+        config = ConfigParser.ConfigParser()
+        config.add_section('state')
+        config.add_section('branch_parents')
+
+        config.set('state', 'next_dest', self.next_dest)
+        config.set('state', 'remaining_branches',
+                   ','.join(self.remaining_branches))
+
+        for branch, parent in self.branch_parents.iteritems():
+            config.set('branch_parents', branch, parent)
+
+        with open(self.filename, 'w') as fp:
+            config.write(fp)
+
+    def delete(self):
+        os.unlink(self.filename)
 
 
 def execute(command, split_lines=False, ignore_errors=False,
@@ -32,44 +82,143 @@ def execute(command, split_lines=False, ignore_errors=False,
         rc = p.wait()
 
     if rc and not ignore_errors and rc not in extra_ignore_errors:
-        print 'Failed to execute command: %s\n%s' % (command, data)
-        sys.exit(1)
+        raise CommandError(data)
 
     return data
 
 
+def run_git(*args):
+    return execute(['git'] + list(args))
+
+
+def run_rebase(*args):
+    try:
+        return run_git('rebase', *args)
+    except CommandError as e:
+        raise CommandError(str(e).replace('git rebase ', 'git rebase-chain '))
+
+
+# Parse any arguments passed to git rebase-chain.
 parser = argparse.ArgumentParser(description='Rebase a chain of branches')
-parser.add_argument('dest_branch', metavar='DEST_BRANCH', type=str)
-parser.add_argument('source_branches', metavar='BRANCH', type=str, nargs='+')
+parser.add_argument('dest_branch',
+                    metavar='DEST_BRANCH',
+                    type=str,
+                    nargs='?',
+                    help='Destination branch or SHA1')
+parser.add_argument('source_branches',
+                    metavar='BRANCH',
+                    type=str,
+                    nargs='*',
+                    help='One or more branches to rebase')
+parser.add_argument('--continue',
+                    dest='continue_rebase',
+                    action='store_true',
+                    help='Continue the active rebase operation')
+parser.add_argument('--skip',
+                    dest='skip_commit',
+                    action='store_true',
+                    help='Skips the current conflicting commit')
+parser.add_argument('--abort',
+                    dest='abort_rebase',
+                    action='store_true',
+                    help='Aborts rebasing the rest of the branches (but '
+                         'does not restore any finished branches)')
 
 args = parser.parse_args()
 
-dest_branch = args.dest_branch
-source_branches = args.source_branches
-parent_branches = {}
+new_rebase = (not args.continue_rebase and
+              not args.skip_commit and
+              not args.abort_rebase)
 
-prev_branch = dest_branch
+# Sanitize arguments.
+if new_rebase and (not args.dest_branch or not args.source_branches):
+    parser.print_help()
+    sys.exit(1)
 
-for branch in source_branches:
-    merge_base = execute(['git', 'merge-base', branch, prev_branch]).strip()
-    prev_sha1 = execute(['git', 'rev-parse', prev_branch]).strip()
+# Set up the state file for this rebase operation.
+state = State()
 
-    if merge_base == prev_sha1:
-        parent_branches[branch] = prev_sha1
+if new_rebase:
+    if state.exists():
+        # The user is attempting to rebase while there's an existing rebase
+        # operation in progress.
+        sys.stderr.write(
+            'You already have a git rebase-chain operation in progress.\n'
+            'You must finish or abort this rebase before you can continue.\n'
+            '\n'
+            'If you are not rebasing, you can delete %s\n'
+            % state.filename)
+        sys.exit(1)
 
-    prev_branch = branch
+    state.next_dest = args.dest_branch
+    state.remaining_branches = args.source_branches
 
+    # Collect the SHA1s of each branch we're going to deal with, along with
+    # their parents.
+    prev_branch = state.next_dest
 
-for branch in source_branches:
-    parent_branch = parent_branches.get(branch, None)
-    args = ['git', 'rebase']
+    for branch in state.remaining_branches:
+        merge_base = run_git('merge-base', branch, prev_branch).strip()
+        prev_sha1 = run_git('rev-parse', prev_branch).strip()
+
+        if merge_base == prev_sha1:
+            state.branch_parents[branch] = prev_sha1
+
+        prev_branch = branch
+
+    state.save()
+else:
+    if not state.exists():
+        # The user is attempting to continue in some form with an existing
+        # rebase operation that doesn't have any existing state backing it.
+        sys.stderr.write(
+            "There doesn't appear to be a git rebase-chain in progress.\n")
+        sys.exit(1)
+
+    state.load()
+
+    if args.abort_rebase:
+        try:
+            run_rebase('--abort')
+        except CommandError as e:
+            sys.stderr.write(str(e))
+            sys.exit(1)
+
+        state.delete()
+        sys.exit(0)
+    elif args.skip_commit:
+        try:
+            run_rebase('--skip')
+        except CommandError as e:
+            sys.stderr.write(str(e))
+            sys.exit(1)
+    elif args.continue_rebase:
+        try:
+            run_rebase('--continue')
+        except CommandError as e:
+            sys.stderr.write(str(e))
+            sys.exit(1)
+
+# Rebase the branches onto the destination, one-by-one.
+for branch in list(state.remaining_branches):
+    parent_branch = state.branch_parents.get(branch, None)
+    args = []
 
     if parent_branch:
-        args += ['--onto', dest_branch, parent_branch]
+        args += ['--onto', state.next_dest, parent_branch]
     else:
-        args.append(dest_branch)
+        args.append(state.next_dest)
 
     args.append(branch)
 
-    execute(args)
-    dest_branch = branch
+    print 'Rebasing branch %s onto %s' % (branch, parent_branch)
+
+    # Store the state now, so that if the rebase fails, and the user decides
+    # to skip or continue, we don't re-attempt this particular branch.
+    state.next_dest = branch
+    state.remaining_branches.pop(0)
+    state.save()
+
+    run_rebase(*args)
+
+state.delete()
