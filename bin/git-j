@@ -278,8 +278,13 @@ def record_jump(old_ref, *args):
     history.save()
 
 
-def checkout_branch(prev_ref):
-    execute(['git', 'checkout', prev_ref], to_console=True)
+def checkout_branch(prev_ref, merge_changes=False):
+    args = ['git', 'checkout', prev_ref]
+
+    if merge_changes:
+        args.append('-m')
+
+    execute(args, to_console=True)
 
 
 def get_ref_name(ref):
@@ -326,14 +331,21 @@ def show_aliases():
         print '%s = %s' % (alias_name, target_name)
 
 
-def jump(dest):
+def jump(args):
+    merge_changes = '-m' in args
+
+    if merge_changes:
+        args.remove('-m')
+
+    dest = args[0]
+
     if dest == '-':
         history = History()
         prev_ref = history.pop()
 
         if prev_ref:
             history.save()
-            checkout_branch(prev_ref)
+            checkout_branch(prev_ref, merge_changes)
         else:
             die('There is no previous branch to jump to.\n')
     elif dest == '..':
@@ -351,7 +363,7 @@ def jump(dest):
         if len(refs) == 0:
             die('There is no parent to jump to.\n')
 
-        checkout_branch(get_ref_name(refs[0]))
+        checkout_branch(get_ref_name(refs[0]), merge_changes)
     else:
         try:
             num = int(dest)
@@ -369,10 +381,10 @@ def jump(dest):
             except IndexError:
                 die('%d is not a valid index in the history.\n' % num)
 
-            checkout_branch(ref)
+            checkout_branch(ref, merge_changes)
         else:
             config = Config()
-            checkout_branch(config.get_alias(dest, dest))
+            checkout_branch(config.get_alias(dest, dest), merge_changes)
 
 
 def main(args):
@@ -398,7 +410,7 @@ def main(args):
     elif args[0] == 'aliases':
         show_aliases()
     else:
-        jump(args[0])
+        jump(args)
 
 
 main(sys.argv[1:])
