@@ -35,6 +35,9 @@ import subprocess
 import sys
 
 
+debug = False
+
+
 class CommandError(Exception):
     pass
 
@@ -89,7 +92,8 @@ def execute(command, split_lines=False, ignore_errors=False,
     """
     Utility function to execute a command and return the output.
     """
-    print ">>> %s" % command
+    if debug:
+        print ">>> %s" % command
 
     if interactive:
         p = subprocess.Popen(command, shell=False)
@@ -177,8 +181,13 @@ parser.add_argument('--abort',
                     action='store_true',
                     help='Aborts rebasing the rest of the branches (but '
                          'does not restore any finished branches)')
+parser.add_argument('--debug',
+                    dest='debug',
+                    action='store_true',
+                    help='Show debug output')
 
 args = parser.parse_args()
+debug = args.debug
 
 new_rebase = (not args.continue_rebase and
               not args.skip_commit and
