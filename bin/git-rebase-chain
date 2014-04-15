@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import argparse
 import os
 import subprocess
 import sys
@@ -37,13 +38,14 @@ def execute(command, split_lines=False, ignore_errors=False,
     return data
 
 
-if len(sys.argv) < 2:
-    print "Usage: git rebase-chain <dest> <branch1> [<branch2> ...]"
-    sys.exit(1)
+parser = argparse.ArgumentParser(description='Rebase a chain of branches')
+parser.add_argument('dest_branch', metavar='DEST_BRANCH', type=str)
+parser.add_argument('source_branches', metavar='BRANCH', type=str, nargs='+')
 
+args = parser.parse_args()
 
-dest_branch = sys.argv[1]
-source_branches = sys.argv[2:]
+dest_branch = args.dest_branch
+source_branches = args.source_branches
 parent_branches = {}
 
 prev_branch = dest_branch
