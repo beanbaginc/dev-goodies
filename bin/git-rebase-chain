@@ -138,7 +138,7 @@ def get_branches_in_range(branch1, branch2):
         ref_type, branch = remaining.split('\t')
 
         if ref_type == 'commit':
-            branches[sha] = branch
+            branches[sha] = branch.lstrip('refs/heads/')
 
     # Get all revisions in the range between the two branches.
     shas = run_git('rev-list', '%s^..%s' % (branch1, branch2),
@@ -244,7 +244,7 @@ else:
 
     if args.abort_rebase:
         try:
-            run_rebase('--abort')
+            print run_rebase('--abort')
         except CommandError as e:
             sys.stderr.write(str(e))
             sys.exit(1)
@@ -253,13 +253,13 @@ else:
         sys.exit(0)
     elif args.skip_commit:
         try:
-            run_rebase('--skip')
+            print run_rebase('--skip')
         except CommandError as e:
             sys.stderr.write(str(e))
             sys.exit(1)
     elif args.continue_rebase:
         try:
-            run_rebase('--continue')
+            print run_rebase('--continue')
         except CommandError as e:
             sys.stderr.write(str(e))
             sys.exit(1)
@@ -276,7 +276,7 @@ for branch in list(state.remaining_branches):
 
     args.append(branch)
 
-    print 'Rebasing branch %s onto %s' % (branch, parent_branch)
+    print 'Rebasing branch %s onto %s' % (branch, state.next_dest)
 
     # Store the state now, so that if the rebase fails, and the user decides
     # to skip or continue, we don't re-attempt this particular branch.
