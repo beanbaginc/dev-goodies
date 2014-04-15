@@ -11,9 +11,18 @@
 # development branch, or you've altered some branch in the middle of your list
 # of branches and want to fix up all remaining branches.
 #
+# This takes the destination branch as the first parameter and then the
+# list of branches as subsequent parameters. As short-hand, you can use '.'
+# for the current branch.
+#
+# If working with a large range of consecutive branches, you can use '..' to
+# simplfy the list. For example, 'branch1..branch10'
+#
 # Some example uses:
 #
 #   $ git rebase-chain master branch1 branch2 branch3 branch4
+#   $ git rebase-chain . branch1 branch2 branch3 branch4
+#   $ git rebase-chain . branch1..branch4
 #   $ git rebase-chain --continue
 #   $ git rebase-chain --skip
 #   $ git rebase-chain --abort
@@ -107,8 +116,8 @@ def execute(command, split_lines=False, ignore_errors=False,
     return data
 
 
-def run_git(*args):
-    return execute(['git'] + list(args))
+def run_git(*args, **kwargs):
+    return execute(['git'] + list(args), **kwargs)
 
 
 def run_rebase(*args):
@@ -116,6 +125,31 @@ def run_rebase(*args):
         return run_git('rebase', *args)
     except CommandError as e:
         raise CommandError(str(e).replace('git rebase ', 'git rebase-chain '))
+
+
+def get_branches_in_range(branch1, branch2):
+    """Returns the list of all branches in a range."""
+    # Build a map of SHAs to branch names
+    branches = {}
+    branch_infos = run_git('for-each-ref', 'refs/heads', split_lines=True)
+
+    for result in branch_infos:
+        sha, remaining = result.strip().split(' ')
+        ref_type, branch = remaining.split('\t')
+
+        if ref_type == 'commit':
+            branches[sha] = branch
+
+    # Get all revisions in the range between the two branches.
+    shas = run_git('rev-list', '%s^..%s' % (branch1, branch2),
+                   split_lines=True)
+    shas = [sha.strip() for sha in shas]
+
+    return reversed([
+        branches[sha]
+        for sha in shas
+        if sha in branches
+    ])
 
 
 # Parse any arguments passed to git rebase-chain.
@@ -170,8 +204,19 @@ if new_rebase:
             % state.filename)
         sys.exit(1)
 
-    state.next_dest = args.dest_branch
-    state.remaining_branches = args.source_branches
+    if args.dest_branch == '.':
+        # This is short-hand for, basically, HEAD. So, find that.
+        state.next_dest = run_git('rev-parse', 'HEAD').strip()
+    else:
+        state.next_dest = args.dest_branch
+
+    for branch in args.source_branches:
+        if '..' in branch:
+            branch1, branch2 = branch.split('..')
+
+            state.remaining_branches += get_branches_in_range(branch1, branch2)
+        else:
+            state.remaining_branches.append(branch)
 
     # Collect the SHA1s of each branch we're going to deal with, along with
     # their parents.
