@@ -62,8 +62,14 @@ class State(object):
         config.read(self.filename)
 
         self.next_dest = config.get('state', 'next_dest')
-        self.remaining_branches = \
-            config.get('state', 'remaining_branches').strip().split(',')
+
+        raw_remaining_branches = \
+            config.get('state', 'remaining_branches').strip()
+
+        if raw_remaining_branches:
+            self.remaining_branches = raw_remaining_branches.split(',')
+        else:
+            self.remaining_branches = []
 
         for branch, parent in config.items('branch_parents'):
             self.branch_parents[branch] = parent
