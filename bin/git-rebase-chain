@@ -23,6 +23,7 @@
 #   $ git rebase-chain master branch1 branch2 branch3 branch4
 #   $ git rebase-chain . branch1 branch2 branch3 branch4
 #   $ git rebase-chain . branch1..branch4
+#   $ git rebase-chain . branch1 branch2..branch4 branch5
 #   $ git rebase-chain --continue
 #   $ git rebase-chain --skip
 #   $ git rebase-chain --abort
