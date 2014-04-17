@@ -137,6 +137,10 @@ def run_rebase(*args):
         raise CommandError(str(e).replace('git rebase ', 'git rebase-chain '))
 
 
+def has_rebase_state():
+    return os.path.exists(os.path.join(state.git_dir, 'rebase-apply'))
+
+
 def get_branches_in_range(branch1, branch2):
     """Returns the list of all branches in a range."""
     # Build a map of SHAs to branch names
@@ -274,11 +278,12 @@ else:
             sys.stderr.write(str(e))
             sys.exit(1)
     elif args.continue_rebase:
-        try:
-            print run_rebase('--continue')
-        except CommandError as e:
-            sys.stderr.write(str(e))
-            sys.exit(1)
+        if has_rebase_state():
+            try:
+                print run_rebase('--continue')
+            except CommandError as e:
+                sys.stderr.write(str(e))
+                sys.exit(1)
 
 # Rebase the branches onto the destination, one-by-one.
 for branch in list(state.remaining_branches):
