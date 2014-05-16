@@ -152,12 +152,14 @@ def get_branches_in_range(branch1, branch2):
     branches = {}
     branch_infos = run_git('for-each-ref', 'refs/heads', split_lines=True)
 
+    strip_len = len('refs/heads/')
+
     for result in branch_infos:
         sha, remaining = result.strip().split(' ')
         ref_type, branch = remaining.split('\t')
 
         if ref_type == 'commit':
-            branches[sha] = branch.lstrip('refs/heads/')
+            branches[sha] = branch[strip_len:]
 
     # Get all revisions in the range between the two branches.
     shas = run_git('rev-list', '%s^..%s' % (branch1, branch2),
