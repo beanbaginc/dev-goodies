@@ -1,8 +1,8 @@
 [alias]
     # Some useful aliases to help with built-in git commands.
-	nb = checkout -b
-	st = status
-	stat = status
+    nb = checkout -b
+    st = status
+    stat = status
     amend = commit --amend
     br = branch
     ci = commit
@@ -11,16 +11,16 @@
     cp = cherry-pick
     d = diff
     dc = diff --cached
-	purr = pull --rebase
+    purr = pull --rebase
 
     # Who needs a graphical repository viewer?
-	lg = log --color --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit
-	lga = log --color --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit --all
+    lg = log --color --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit
+    lga = log --color --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit --all
 
     # Let's make rebasing a bit nicer.
-	rebase-this = "!git rebase --onto $1 HEAD^ #"
-	rebase-here = "!git rebase HEAD $1 #"
+    rebase-this = "!git rebase --onto $1 HEAD^ #"
+    rebase-here = "!git rebase HEAD $1 #"
 
     # Simplify some of refactory's commands.
-	rc = rebase-chain
-	int = integrate
+    rc = rebase-chain
+    int = integrate
