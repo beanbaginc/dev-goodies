@@ -1,12 +1,24 @@
 #!/usr/bin/env python
+#
+# Cherry-picks individual files from a commit.
+#
+# git-cherry-files takes a branch/SHA, and a list of files to extract. It will
+# then take those files from the commit and apply them to the index.
+#
+# For example:
+#
+#    git cherry-files my-feature-branch src/foo.c README
+#
 
 import os
 import sys
+
 
 def execute(cmd, fail_ok=False):
     if os.system(cmd) != 0 and not fail_ok:
         print "Failed to execute: %s" % cmd
         sys.exit(1)
+
 
 if len(sys.argv) < 3:
     print "Usage: git cherry-files <sha1> file1 [file2 ...]"
