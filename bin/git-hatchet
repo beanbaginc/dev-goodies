@@ -1,4 +1,32 @@
 #!/usr/bin/env python
+#
+# Chops a branch containing a single commit into multiple branches, by
+# file path.
+#
+# When working on very large, complex changes, it's sometimes best to
+# split up the work into multiple branches. git-hatchet helps to do that.
+#
+# git-hatchet takes a branch name and a set of file paths. The specified
+# files paths affected in the branch's top-most commit will be pulled out of
+# that commit and placed as a new commit in the current branch.
+#
+# By passing --extract-only, the original commit will not be modified.
+#
+# For example, given a branch 'orig-branch' that contains a HEAD commit
+# modifying files in docs/manual, files in docs/releasenotes/, files in
+# src/, and a top-level README:
+#
+#    $ git checkout -b my-new-branch
+#    $ git hatchet orig-branch docs/manual README
+#
+# This will result in the original commit no longer modifying README or any
+# files in docs/manual, but retaining the changes in src/ and
+# docs/releasenotes. It will also result in a new commit in the current branch
+# containing the modifications to README and files in docs/manual.
+#
+# This is not a commonly-needed operation, but when you do need it,
+# git-hatchet is a major time-saver.
+#
 
 import filecmp
 import os
@@ -10,7 +38,6 @@ from optparse import OptionParser
 
 
 VERSION = "0.1"
-CHECKOUT_DIR_KEY = "changesetsync.checkoutdir"
 
 if os.uname()[0] == "Darwin":
    CP_ARGS = "-pR"
