@@ -269,7 +269,7 @@ if new_rebase:
         merge_base = run_git('merge-base', branch, prev_branch).strip()
         prev_sha1 = run_git('rev-parse', prev_branch).strip()
 
-        if merge_base == prev_sha1:
+        if merge_base == prev_sha1 and branch not in state.branch_parents:
             state.branch_parents[branch] = prev_sha1
 
         prev_branch = branch
