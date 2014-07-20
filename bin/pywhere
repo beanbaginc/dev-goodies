@@ -1,4 +1,16 @@
 #!/usr/bin/env python
+#
+# Outputs the path to the given Python module.
+#
+# This takes the name of a Python module and outputs the path to that
+# module. This is helpful when you want to figure out where a module is
+# installed, in order to edit it, remove it, or whatever.
+#
+# Example:
+#
+#    vim `pywhere urllib2`
+#
+
 import os
 import sys
 
