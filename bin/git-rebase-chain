@@ -21,6 +21,8 @@
 # If you need to specify a parent commit/branch for any given branch range or
 # individual branch passed, you can prefix with '<sha>:'. For example,
 # 'abc1234:branch1..branch5' will start the rebase for 'branch1' at 'abc1234'.
+# As short-hand, you can leave the parent blank, and it'll be the equivalent
+# of 'branch1^'.
 #
 # Some example uses:
 #
@@ -28,6 +30,8 @@
 #   $ git rebase-chain . branch1 branch2 branch3 branch4
 #   $ git rebase-chain . branch1..branch4
 #   $ git rebase-chain . branch1 branch2..branch4 branch5
+#   $ git rebase-chain . abc123:branch2..branch4
+#   $ git rebase-chain . :branch2..branch4
 #   $ git rebase-chain --continue
 #   $ git rebase-chain --skip
 #   $ git rebase-chain --abort
@@ -250,7 +254,11 @@ if new_rebase:
         else:
             state.remaining_branches.append(branch)
 
-        if branch_parent:
+        if branch_parent is not None:
+            if branch_parent == '':
+                # This is short-hand for branch1^.
+                branch_parent = run_git('rev-parse', branch + '^').strip()
+
             state.branch_parents[branch] = branch_parent
 
     # Collect the SHA1s of each branch we're going to deal with, along with
