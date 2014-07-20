@@ -12,4 +12,9 @@ BRANCH=$1
 git rebase $CUR_BRANCH $BRANCH || exit 1
 git checkout $CUR_BRANCH
 git merge $BRANCH || exit 1
+
+if test "$2" = "-e"; then
+	git commit --amend
+fi
+
 git branch -d $BRANCH
