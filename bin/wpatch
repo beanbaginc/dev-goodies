@@ -1,4 +1,16 @@
 #!/bin/sh
+#
+# Applies an externally-hosted patch file.
+#
+# This takes the URL to a patch file and applies it. By default, it will
+# pass -p0 to patch, but a custom -pX flag can be specified as the first
+# argument to change this.
+#
+# Example:
+#
+#    $ wpatch http://example.com/foo.diff
+#    $ wpatch -p2 http://example.com/bar.diff
+#
 
 PATCH_LEVEL="-p0"
 
