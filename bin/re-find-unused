@@ -1,4 +1,23 @@
 #!/usr/bin/env python
+#
+# Finds C/C++ files that unnecessarily include a given header file.
+#
+# This takes the name of a header (.h) file and a starting directory, and
+# will look for any files nested within that directory that unnecessarily
+# include the given header file.
+#
+# Every file that directly includes the header but doesn't need to will be
+# listed.
+#
+# This can help a lot with cleaning up a source tree in order reduce build
+# time.
+#
+# To work, this requires that you first install both ctags and cscope.
+#
+# For example:
+#
+#    $ re-find-unused factoryFactory.hh src/
+#
 
 import os
 import subprocess
