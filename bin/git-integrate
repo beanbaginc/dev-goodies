@@ -17,4 +17,4 @@ if test "$2" = "-e"; then
 	git commit --amend
 fi
 
-git branch -d $BRANCH
+git branch -D $BRANCH
