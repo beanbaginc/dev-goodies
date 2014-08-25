@@ -7,15 +7,19 @@
 #
 # git-j can be used in the following ways:
 #
-# git j <branchname>       - Jumps to a branch
-# git j -                  - Jumps to the last checked out branch
-# git j ..                 - Jumps to the parent branch (stopping at master)
-# git j history            - Show the stored jump history
-# git j <number>           - Jump to the numbered item in the history
-# git j alias name=branch  - Store an alias for a branch or SHA
-# git j alias name=        - Removes a stored alias
-# git j alias name         - Shows the value of a stored alias
-# git j aliases            - Shows all aliases
+# git j <branchname>         - Jumps to a branch
+# git j -                    - Jumps to the last checked out branch
+# git j ..                   - Jumps to the parent branch (stopping at master)
+# git j history              - Show the stored jump history
+# git j <number>             - Jump to the numbered item in the history
+# git j alias name=branch    - Store an alias for a branch or SHA
+# git j alias name=          - Removes a stored alias
+# git j alias name           - Shows the value of a stored alias
+# git j aliases              - Shows all aliases
+# git j alias -g name=branch - Store a global alias for a branch or SHA
+# git j alias -g name=       - Removes a stored global alias
+# git j alias -g name        - Shows the value of a stored global alias
+# git j aliases -g           - Shows all global aliases
 #
 # On first usage, this will install a post-checkout hook to the repository.
 # It will not overwrite an existing hook, but it must be present for git-j
@@ -78,6 +82,13 @@
 # just do:
 #
 #   $ git j 2
+#
+#
+# Aliases are a very useful feature, and some may be useful across all
+# your repositories. To create a global alias, just pass -g when defining
+# the alias:
+#
+#   $ git j alias -g m=master
 #
 
 import ConfigParser
