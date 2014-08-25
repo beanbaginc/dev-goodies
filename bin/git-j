@@ -161,10 +161,11 @@ class Config(object):
     def __init__(self):
         self._check_migrate_settings()
 
-    def get_aliases(self):
+    def get_aliases(self, is_global=False):
         lines = self._run_git_config(['--get-all', self.ALIAS_KEY],
                                      ignore_errors=(1,),
-                                     split_lines=True)
+                                     split_lines=True,
+                                     is_global=is_global)
 
         if lines:
             return [
@@ -174,26 +175,29 @@ class Config(object):
         else:
             return []
 
-    def get_alias(self, alias_name, default=None):
-        for key, value in self.get_aliases():
+    def get_alias(self, alias_name, default=None, is_global=False):
+        for key, value in self.get_aliases(is_global=is_global):
             if key == alias_name:
                 return value
 
         return default
 
-    def set_alias(self, alias_name, target_name):
+    def set_alias(self, alias_name, target_name, is_global=False):
         if target_name:
-            self._run_git_config([
-                '--add', self.ALIAS_KEY, '%s=%s' % (alias_name, target_name)
-            ])
+            self._run_git_config(
+                [
+                    '--add', self.ALIAS_KEY,
+                    '%s=%s' % (alias_name, target_name),
+                ],
+                is_global=is_global)
 
-    def remove_alias(self, alias_name):
-        alias_value = self.get_alias(alias_name)
+    def remove_alias(self, alias_name, is_global=False):
+        alias_value = self.get_alias(alias_name, is_global=is_global)
 
         if alias_value:
-            self._run_git_config([
-                '--unset', self.ALIAS_KEY, re.escape(alias_value)
-            ])
+            self._run_git_config(
+                ['--unset', self.ALIAS_KEY, re.escape(alias_value)],
+                is_global=is_global)
 
     def _check_migrate_settings(self):
         """Migrates settings from an older j-config file.
@@ -221,10 +225,10 @@ class Config(object):
     def _build_alias_key(self, alias_name):
         return '%s.%s' % (self.ALIASES_SECTION, alias_name)
 
-    def _run_git_config(self, command, **kwargs):
+    def _run_git_config(self, command, is_global=False, **kwargs):
         cmd = ['git', 'config']
 
-        if self.is_global:
+        if is_global:
             cmd.append('--global')
 
         cmd += command
@@ -347,8 +351,17 @@ def show_history():
 
 
 def set_alias(args):
+    if '--global' in args:
+        is_global = True
+        args.remove('--global')
+    elif '-g' in args:
+        is_global = True
+        args.remove('-g')
+    else:
+        is_global = False
+
     if len(args) != 1:
-        die('Usage: git j alias alias_name[=[branch]]\n')
+        die('Usage: git j alias [-g|--global] alias_name[=[branch]]\n')
 
     config = Config()
     parts = args[0].split('=', 1)
@@ -358,11 +371,11 @@ def set_alias(args):
         target = parts[1]
 
         if target:
-            config.set_alias(name, target)
+            config.set_alias(name, target, is_global=is_global)
         else:
-            config.remove_alias(name)
+            config.remove_alias(name, is_global=is_global)
     else:
-        target_name = config.get_alias(name)
+        target_name = config.get_alias(name, is_global=is_global)
 
         if target_name:
             print target_name
@@ -370,10 +383,12 @@ def set_alias(args):
             die('%s is not an alias' % name)
 
 
-def show_aliases():
+def show_aliases(args):
+    is_global = ('--global' in args or '-g' in args)
+
     config = Config()
 
-    for alias_name, target_name in config.get_aliases():
+    for alias_name, target_name in config.get_aliases(is_global=is_global):
         print '%s = %s' % (alias_name, target_name)
 
 
@@ -454,7 +469,7 @@ def main(args):
     elif args[0] == 'alias':
         set_alias(args[1:])
     elif args[0] == 'aliases':
-        show_aliases()
+        show_aliases(args[1:])
     else:
         jump(args)
 
