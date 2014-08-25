@@ -244,7 +244,7 @@ def die(msg=None):
 
 
 def execute(command, split_lines=False, to_console=False, ignore_errors=(),
-            show_error=True):
+            show_die_error=True):
     """
     Utility function to execute a command and return the output.
     """
@@ -272,7 +272,7 @@ def execute(command, split_lines=False, to_console=False, ignore_errors=(),
     rc = p.wait()
 
     if rc and rc not in ignore_errors:
-        if show_error:
+        if show_die_error:
             die('Failed to execute command: %s\n%s' % (command, data))
         else:
             die()
@@ -336,7 +336,7 @@ def checkout_branch(prev_ref, merge_changes=False):
     if merge_changes:
         args.append('-m')
 
-    execute(args, to_console=True)
+    execute(args, to_console=True, show_die_error=False)
 
 
 def get_ref_name(ref):
