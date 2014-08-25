@@ -83,6 +83,7 @@
 import ConfigParser
 import hashlib
 import os
+import re
 import subprocess
 import sys
 
@@ -153,49 +154,93 @@ class History(object):
 
 
 class Config(object):
-    FILENAME = 'j-config'
+    MAIN_SECTION = 'git-j'
+    ALIAS_KEY = '%s.alias' % MAIN_SECTION
+    ENCODED_ALIAS_RE = re.compile('\s*=\s*')
 
     def __init__(self):
-        self.filename = os.path.join(git_dir, self.FILENAME)
-        self._config = ConfigParser.RawConfigParser()
-
-        if os.path.exists(self.filename):
-            self._config.read(self.filename)
-
-    def save(self):
-        with open(self.filename, 'w') as fp:
-            self._config.write(fp)
+        self._check_migrate_settings()
 
     def get_aliases(self):
-        try:
-            return self._config.items('aliases')
-        except ConfigParser.NoSectionError:
+        lines = self._run_git_config(['--get-all', self.ALIAS_KEY],
+                                     ignore_errors=(1,),
+                                     split_lines=True)
+
+        if lines:
+            return [
+                self.ENCODED_ALIAS_RE.split(line.strip(), 1)
+                for line in lines
+            ]
+        else:
             return []
 
     def get_alias(self, alias_name, default=None):
-        if self._config.has_option('aliases', alias_name):
-            return self._config.get('aliases', alias_name)
-        else:
-            return default
+        for key, value in self.get_aliases():
+            if key == alias_name:
+                return value
+
+        return default
 
     def set_alias(self, alias_name, target_name):
-        if not self._config.has_section('aliases'):
-            self._config.add_section('aliases')
-
         if target_name:
-            self._config.set('aliases', alias_name, target_name)
+            self._run_git_config([
+                '--add', self.ALIAS_KEY, '%s=%s' % (alias_name, target_name)
+            ])
 
     def remove_alias(self, alias_name):
-        if self._config.has_option('aliases', alias_name):
-            self._config.remove_option('aliases', alias_name)
+        alias_value = self.get_alias(alias_name)
+
+        if alias_value:
+            self._run_git_config([
+                '--unset', self.ALIAS_KEY, re.escape(alias_value)
+            ])
+
+    def _check_migrate_settings(self):
+        """Migrates settings from an older j-config file.
+
+        Older versions of git-j stored aliases in a j-config file. This
+        will migrate any aliases from there into the Git config file.
+        """
+        filename = os.path.join(git_dir, 'j-config')
+
+        if os.path.exists(filename):
+            print 'Migrating settings from j-config to .git/config...'
+            config = ConfigParser.RawConfigParser()
+            config.read(filename)
+
+            try:
+                aliases = config.items('aliases')
+            except ConfigParser.NoSectionError:
+                aliases = []
+
+            for key, value in aliases:
+                self.set_alias(key, value)
+
+            os.unlink(filename)
+
+    def _build_alias_key(self, alias_name):
+        return '%s.%s' % (self.ALIASES_SECTION, alias_name)
+
+    def _run_git_config(self, command, **kwargs):
+        cmd = ['git', 'config']
+
+        if self.is_global:
+            cmd.append('--global')
+
+        cmd += command
+
+        return execute(cmd, **kwargs)
 
 
-def die(msg):
-    sys.stderr.write(msg)
+def die(msg=None):
+    if msg:
+        sys.stderr.write(msg)
+
     sys.exit(1)
 
 
-def execute(command, split_lines=False, to_console=False):
+def execute(command, split_lines=False, to_console=False, ignore_errors=(),
+            show_error=True):
     """
     Utility function to execute a command and return the output.
     """
@@ -222,8 +267,11 @@ def execute(command, split_lines=False, to_console=False):
 
     rc = p.wait()
 
-    if rc:
-        die('Failed to execute command: %s\n%s' % (command, data))
+    if rc and rc not in ignore_errors:
+        if show_error:
+            die('Failed to execute command: %s\n%s' % (command, data))
+        else:
+            die()
 
     return data
 
@@ -313,8 +361,6 @@ def set_alias(args):
             config.set_alias(name, target)
         else:
             config.remove_alias(name)
-
-        config.save()
     else:
         target_name = config.get_alias(name)
 
